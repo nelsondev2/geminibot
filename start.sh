@@ -11,7 +11,7 @@ echo "📁 Directorio actual: $(pwd)"
 echo "🐍 Versión de Python: $(python --version)"
 
 # Nombre del archivo de backup (configurable por variable de entorno)
-BACKUP_FILE="${BACKUP_FILE:-gembot.tar}"
+BACKUP_FILE="${BACKUP_FILE:-geminibot.tar}"
 
 # Función para importar backup
 import_backup() {
