@@ -1,0 +1,4 @@
+deltabot-cli
+deltachat2
+python-dotenv
+requests
