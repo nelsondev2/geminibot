@@ -1,29 +1,45 @@
 import os
-import time
 import requests
 import base64
 import uuid
 from dotenv import load_dotenv
 from deltachat2 import MsgData, events
 from deltabot_cli import BotCli
+from argparse import Namespace
+from deltachat2.bot import Bot  # para tipado en on_init
 
-# Cargar API key
+# Cargar API key desde .env
 load_dotenv()
 API_KEY = os.getenv("GEMINI_API_KEY")
 
 MODEL = "models/gemini-2.0-flash-preview-image-generation"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/{MODEL}:generateContent?key={API_KEY}"
 
-# Marca de tiempo de arranque (para filtrar mensajes antiguos)
-START_TIME = int(time.time())
-
-# Directorio de datos persistente (montar volumen en Render en /data)
-DATA_DIR = os.getenv("DATA_DIR", "/data/deltachat")
-
 cli = BotCli("gemini_image_bot")
 
+# Texto de ayuda personalizado para GemImg
+HELP = (
+    "🤖 *GemImg Bot*\n\n"
+    "Envíame texto para generar una imagen con Gemini.\n"
+    "Ejemplos:\n"
+    "- pirámide futurista al atardecer\n"
+    "- retrato realista de un astronauta\n\n"
+    "Comandos:\n"
+    "`/help` → Muestra este mensaje\n"
+    "(Cualquier otro comando será ignorado)"
+)
+
+# Configuración inicial del bot al arrancar
+@cli.on_init
+def on_init(bot: Bot, args: Namespace) -> None:
+    for accid in bot.rpc.get_all_account_ids():
+        bot.rpc.set_config(accid, "displayname", "GemImg")
+        bot.rpc.set_config(accid, "skip_start_messages", "1")
+        bot.rpc.set_config(accid, "selfstatus", HELP)
+        bot.rpc.set_config(accid, "delete_device_after", str(60 * 60 * 24))  # 1 día
+
 def generar_imagen(prompt):
-    """Genera imagen usando la API de Gemini."""
+    """Genera imagen usando la API de Gemini sin proxies"""
     if not API_KEY:
         return None, "No se encontró la API key. Define GEMINI_API_KEY en tu archivo .env"
 
@@ -67,36 +83,19 @@ def generar_imagen(prompt):
     except Exception as e:
         return None, f"Error procesando la respuesta: {e}"
 
+# Evento: cuando llega un mensaje nuevo
 @cli.on(events.NewMessage)
 def responder_con_imagen(bot, accid, event):
-    # Filtrar mensajes antiguos
-    if event.msg.timestamp < START_TIME:
-        bot.logger.info(f"Ignorando mensaje antiguo: {event.msg.text}")
-        bot.rpc.mark_seen(accid, event.msg.chat_id)
+    prompt = event.msg.text.strip()
+    if not prompt:
         return
 
-    prompt = event.msg.text.strip() if event.msg.text else ""
-
-    # Ignorar comandos
+    # Ignorar comandos, salvo /help
     if prompt.startswith("/"):
         if prompt.lower() == "/help":
-            bot.rpc.send_msg(accid, event.msg.chat_id, MsgData(
-                text=(
-                    "🤖 *GemImg Bot*\n\n"
-                    "Envíame texto para generar una imagen.\n"
-                    "También puedes adjuntar una imagen como referencia junto con tu descripción.\n\n"
-                    "Ejemplos:\n"
-                    "- pirámide futurista al atardecer\n"
-                    "- (imagen adjunta) + 'estilo acuarela'\n\n"
-                    "Comandos:\n"
-                    "`/help` → Muestra este mensaje"
-                )
-            ))
-        bot.rpc.mark_seen(accid, event.msg.chat_id)
-        return
-
-    if not prompt:
-        bot.rpc.mark_seen(accid, event.msg.chat_id)
+            bot.rpc.send_msg(accid, event.msg.chat_id, MsgData(text=HELP))
+        else:
+            bot.logger.info(f"Ignorando comando: {prompt}")
         return
 
     bot.logger.info(f"Generando imagen para: {prompt}")
@@ -111,9 +110,6 @@ def responder_con_imagen(bot, accid, event):
         bot.rpc.send_msg(accid, event.msg.chat_id, MsgData(
             text=f"No se pudo generar la imagen. {descripcion or ''}"
         ))
-
-    # ✅ Marcar como leído después de responder
-    bot.rpc.mark_seen(accid, event.msg.chat_id)
 
 if __name__ == "__main__":
     cli.start()
