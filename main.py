@@ -33,7 +33,7 @@ HELP = (
 @cli.on_init
 def on_init(bot: Bot, args: Namespace) -> None:
     for accid in bot.rpc.get_all_account_ids():
-        bot.rpc.set_config(accid, "displayname", "GemImg")
+        bot.rpc.set_config(accid, "displayname", "GemImge")
         bot.rpc.set_config(accid, "skip_start_messages", "1")
         bot.rpc.set_config(accid, "selfstatus", HELP)
         bot.rpc.set_config(accid, "delete_device_after", str(60 * 60 * 24))  # 1 día
