@@ -20,7 +20,7 @@ START_TIME = int(time.time())
 # Directorio de datos persistente (montar volumen en Render en /data)
 DATA_DIR = os.getenv("DATA_DIR", "/data/deltachat")
 
-cli = BotCli("gemini_image_bot", data_dir=DATA_DIR)
+cli = BotCli("gemini_image_bot")
 
 def generar_imagen(prompt):
     """Genera imagen usando la API de Gemini."""
