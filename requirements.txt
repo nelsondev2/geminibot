@@ -1,0 +1,6 @@
+deltabot-cli
+requests
+python-dotenv
+gtts
+SpeechRecognition
+langid
