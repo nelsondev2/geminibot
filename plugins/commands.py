@@ -2,7 +2,7 @@ import os
 import tempfile
 from deltachat2 import MsgData
 from deltachat2.transport import JsonRpcError
-from . import database, image_generation
+from . import image_generation
 
 def isbotinchat(bot, accid, chatid):
     """Verifica si el bot sigue siendo miembro del chat"""
@@ -58,6 +58,18 @@ def handle_message(bot, accid, event):
             bot.rpc.sendmsg(accid, chatid, MsgData(text=error_msg))
         return
 
+    # Comando de ayuda simplificado
+    if text == "/help":
+        help_text = """🤖 Gemini Bot - Comandos disponibles:
+
+🖼️ Imágenes:
+- /imagen <descripción> - Genera una imagen con IA
+
+Ejemplo: /imagen un paisaje montañoso al atardecer
+"""
+        bot.rpc.sendmsg(accid, chatid, MsgData(text=help_text))
+        return
+
     # Si es un mensaje normal (no comando)
     if text and not text.startswith('/'):
         try:
@@ -66,49 +78,11 @@ def handle_message(bot, accid, event):
                 print(f"Bot ya no está en el chat {chatid}, ignorando mensaje")
                 return
             
-            # Obtener configuración del chat
-            chatdata = database.getchatconfig(chatid)
-            if not chatdata:
-                # Configuración por defecto
-                chatinfo = bot.rpc.getbasicchatinfo(accid, chatid)
-                chattitle = chatinfo.name if chatinfo.name else "Chat privado"
-                prompt = 'Eres un asistente útil que responde de manera clara y concisa.'
-                audiomode = 0
-                textfilemode = 0
-                voicename = 'Kore'
-                database.savechatconfig(chatid, chattitle, prompt, audiomode, textfilemode, voicename)
-            
-            # Guardar mensaje del usuario
-            database.savemessage(chatid, text, "user")
-            
-            # Obtener historial de conversación
-            history = database.getchathistory(chatid)
-            messages = []
-
-            # Construir mensajes para la API
-            messages.append({"role": "user", "parts": [{"text": prompt}]})
-
-            # Agregar historial (en orden inverso)
-            for content, role in reversed(history):
-                if role == "user":
-                    messages.append({"role": "user", "parts": [{"text": content}]})
-                else:
-                    messages.append({"role": "model", "parts": [{"text": content}]})
-
-            # Agregar el mensaje actual
-            messages.append({"role": "user", "parts": [{"text": text}]})
-
             # Enviar indicador de escritura
             bot.rpc.sendchataction(accid, chatid, "typing")
-
-            # Llamar a la API de Gemini (deberías importar textprocessing si lo necesitas)
-            # respuesta = textprocessing.callgemini_api(messages)
             
-            # Para este ejemplo, solo confirmamos recepción del mensaje
-            respuesta = "✅ Mensaje recibido. Funcionalidad de texto desactivada, solo imágenes disponibles."
-            
-            # Guardar respuesta del asistente
-            database.savemessage(chatid, respuesta, "assistant")
+            # Respuesta simple para mensajes de texto
+            respuesta = "🤖 Solo respondo al comando /imagen. Usa /help para ver los comandos disponibles."
             
             # Enviar respuesta
             bot.rpc.sendmsg(accid, chatid, MsgData(text=respuesta))
