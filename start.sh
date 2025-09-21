@@ -4,6 +4,10 @@ set -e
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 BACKUP_FILE="${BACKUP_FILE:-geminibot.tar}"
 
+# Ir a la carpeta raíz del proyecto (donde está main.py)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
 echo "🚀 Iniciando Gemini Bot..."
 echo "📁 Directorio actual: $(pwd)"
 echo "🐍 Versión de Python: $($PYTHON_BIN --version)"
