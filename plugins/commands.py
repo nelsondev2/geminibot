@@ -275,7 +275,6 @@ def handle_message(bot, accid, event):
                     chat_id,
                     MsgData(
                         file=imagen_data,
-                        filename="imagen_generada.png",
                         text=descripcion if descripcion else "Imagen generada por Gemini IA"
                     )
                 )
