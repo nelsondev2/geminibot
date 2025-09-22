@@ -2,8 +2,9 @@ import os
 import requests
 import base64
 import uuid
+import time
 from dotenv import load_dotenv
-from deltachat2 import MsgData, events
+from deltachat2 import MsgData, events, ChatType
 from deltabot_cli import BotCli
 from argparse import Namespace
 from deltachat2.bot import Bot  # para tipado en on_init
@@ -17,6 +18,9 @@ ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/{MODEL}:generateCo
 
 cli = BotCli("gemini_image_bot")
 
+# Variable para controlar mensajes antiguos
+BOT_START_TIME = time.time()
+
 # Texto de ayuda personalizado para GemImg
 HELP = (
     "🤖 *GemImg Bot*\n\n"
@@ -28,6 +32,21 @@ HELP = (
     "`/help` → Muestra este mensaje\n"
     "(Cualquier otro comando será ignorado)"
 )
+
+def should_process_message(event):
+    """Determina si el mensaje debe ser procesado (evita reprocesar mensajes antiguos)"""
+    msg_age = time.time() - event.msg.timestamp
+    return msg_age < 120  # Procesar solo mensajes de menos de 2 minutos
+
+def mark_as_read(bot, accid, msg_id, chat_id):
+    """Marca el mensaje como leído si es un chat individual"""
+    try:
+        chat = bot.rpc.get_basic_chat_info(accid, chat_id)
+        if chat.chat_type == ChatType.SINGLE:
+            bot.rpc.markseen_msgs(accid, [msg_id])
+            bot.logger.debug(f"Mensaje {msg_id} marcado como leído")
+    except Exception as e:
+        bot.logger.error(f"Error marcando como leído: {e}")
 
 # Configuración inicial del bot al arrancar
 @cli.on_init
@@ -86,9 +105,17 @@ def generar_imagen(prompt):
 # Evento: cuando llega un mensaje nuevo
 @cli.on(events.NewMessage)
 def responder_con_imagen(bot, accid, event):
+    # Ignorar mensajes antiguos al reiniciar el bot
+    if not should_process_message(event):
+        bot.logger.info(f"Ignorando mensaje antiguo: {event.msg.text[:50]}...")
+        return
+
     prompt = event.msg.text.strip()
     if not prompt:
         return
+
+    # Marcar como leído inmediatamente (solo en chats individuales)
+    mark_as_read(bot, accid, event.msg.id, event.msg.chat_id)
 
     # Ignorar comandos, salvo /help
     if prompt.startswith("/"):
@@ -99,13 +126,31 @@ def responder_con_imagen(bot, accid, event):
         return
 
     bot.logger.info(f"Generando imagen para: {prompt}")
+    
+    # Enviar reacción de "procesando" (opcional)
+    try:
+        bot.rpc.send_reaction(accid, event.msg.id, ["⏳"])
+    except:
+        pass  # Si falla la reacción, continuar igual
+    
     imagen_path, descripcion = generar_imagen(prompt)
+
+    # Limpiar reacción de "procesando"
+    try:
+        bot.rpc.send_reaction(accid, event.msg.id, [])
+    except:
+        pass
 
     if imagen_path:
         bot.rpc.send_msg(accid, event.msg.chat_id, MsgData(
             text=descripcion or "Aquí tienes tu imagen:",
             file=imagen_path
         ))
+        # Limpiar archivo temporal después de enviar
+        try:
+            os.remove(imagen_path)
+        except:
+            pass
     else:
         bot.rpc.send_msg(accid, event.msg.chat_id, MsgData(
             text=f"No se pudo generar la imagen. {descripcion or ''}"
