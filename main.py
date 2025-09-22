@@ -18,9 +18,6 @@ ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/{MODEL}:generateCo
 
 cli = BotCli("gemini_image_bot")
 
-# Variable para controlar mensajes antiguos
-BOT_START_TIME = time.time()
-
 # Texto de ayuda personalizado para GemImg
 HELP = (
     "🤖 *GemImg Bot*\n\n"
@@ -32,11 +29,6 @@ HELP = (
     "`/help` → Muestra este mensaje\n"
     "(Cualquier otro comando será ignorado)"
 )
-
-def should_process_message(event):
-    """Determina si el mensaje debe ser procesado (evita reprocesar mensajes antiguos)"""
-    msg_age = time.time() - event.msg.timestamp
-    return msg_age < 120  # Procesar solo mensajes de menos de 2 minutos
 
 def mark_as_read(bot, accid, msg_id, chat_id):
     """Marca el mensaje como leído si es un chat individual"""
@@ -102,36 +94,40 @@ def generar_imagen(prompt):
     except Exception as e:
         return None, f"Error procesando la respuesta: {e}"
 
-# Evento: cuando llega un mensaje nuevo
+@cli.after(events.NewMessage)
+def delete_msgs(bot, accid, event):
+    bot.rpc.delete_messages(accid, [event.msg.id])
+
+# Comando de ayuda
+@cli.on(events.NewMessage(command="/help"))
+def comando_help(bot, accid, event):
+    """Muestra la ayuda del bot"""
+    mark_as_read(bot, accid, event.msg.id, event.msg.chat_id)
+    bot.rpc.send_msg(accid, event.msg.chat_id, MsgData(text=HELP))
+
+# Comando para generar imágenes (cualquier mensaje que no sea comando)
 @cli.on(events.NewMessage)
 def responder_con_imagen(bot, accid, event):
-    # Ignorar mensajes antiguos al reiniciar el bot
-    if not should_process_message(event):
-        bot.logger.info(f"Ignorando mensaje antiguo: {event.msg.text[:50]}...")
-        return
-
+    """Genera imagen para cualquier texto que no sea comando"""
     prompt = event.msg.text.strip()
     if not prompt:
+        return
+
+    # Si es un comando, ignorar (ya se maneja en otras funciones)
+    if prompt.startswith("/"):
+        bot.logger.info(f"Ignorando comando: {prompt}")
         return
 
     # Marcar como leído inmediatamente (solo en chats individuales)
     mark_as_read(bot, accid, event.msg.id, event.msg.chat_id)
 
-    # Ignorar comandos, salvo /help
-    if prompt.startswith("/"):
-        if prompt.lower() == "/help":
-            bot.rpc.send_msg(accid, event.msg.chat_id, MsgData(text=HELP))
-        else:
-            bot.logger.info(f"Ignorando comando: {prompt}")
-        return
-
     bot.logger.info(f"Generando imagen para: {prompt}")
     
-    # Enviar reacción de "procesando" (opcional)
+    # Enviar reacción de "procesando"
     try:
         bot.rpc.send_reaction(accid, event.msg.id, ["⏳"])
     except:
-        pass  # Si falla la reacción, continuar igual
+        pass
     
     imagen_path, descripcion = generar_imagen(prompt)
 
